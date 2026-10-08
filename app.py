@@ -99,7 +99,7 @@ st.sidebar.caption(
 st.title("Predicción del abandono de empleados")
 st.caption(
     "Aplicación interactiva desarrollada a partir de los modelos "
-    "evaluados en la ACA 2."
+    "evaluados en la ACA 1."
 )
 
 # ============================================================
@@ -652,5 +652,5 @@ else:
 st.divider()
 st.caption(
     "Proyecto académico – Especialización en Inteligencia Artificial. "
-    "Los modelos corresponden a la ejecución documentada en el notebook ACA 2."
+    "Los modelos corresponden a la ejecución documentada en el notebook ACA 1."
 )
