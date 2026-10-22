@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -22,8 +21,7 @@ st.set_page_config(
 # ============================================================
 @st.cache_resource
 def cargar_datos():
-    ruta_modelos = os.path.join(os.path.dirname(os.path.abspath(__file__)), "modelos_despliegue.joblib")
-    return joblib.load(ruta_modelos)
+    return joblib.load("modelos_despliegue.joblib")
 
 
 try:
@@ -139,8 +137,6 @@ st.sidebar.title("Navegación")
 pagina = st.sidebar.radio(
     "Seleccione una sección",
     [
-        "Presentación",
-        "Análisis exploratorio (EDA)",
         "Resumen",
         "Comparación de modelos",
         "Análisis del modelo",
@@ -174,171 +170,6 @@ st.caption(
     "Aplicación interactiva desarrollada a partir de los modelos "
     "evaluados en la ACA 1 – Caso 1."
 )
-
-
-# ============================================================
-# PRESENTACIÓN (NUEVA SECCIÓN; NO ALTERA LOS MÓDULOS EXISTENTES)
-# ============================================================
-if pagina == "Presentación":
-    st.title("Clasificación del abandono de empleados")
-    st.subheader("Especialización en Inteligencia Artificial")
-    st.write(
-        "Aplicación de aprendizaje automático para analizar y clasificar "
-        "el abandono de empleados mediante modelos supervisados."
-    )
-
-    st.markdown("### Objetivo")
-    st.write(
-        "Presentar los resultados de los modelos de clasificación evaluados "
-        "y permitir explorar el conjunto de datos antes de consultar sus métricas."
-    )
-
-    st.markdown("### Conjunto de datos")
-    st.write("IBM HR Analytics — Employee Attrition")
-
-    st.markdown("### Integrantes")
-    st.write(
-        "Juan Guillermo Ríos  ·  Víctor Rodríguez Polo  ·  "
-        "Michelle Ángel Castillo Mendoza"
-    )
-    st.markdown("### Docente")
-    st.write("Hamilton Rivera")
-
-    st.info(
-        "El modelo seleccionado en el estudio es Random Forest. "
-        "Las demás alternativas continúan disponibles en la selección de modelo "
-        "y en los módulos originales de la aplicación."
-    )
-    st.stop()
-
-
-# ============================================================
-# ANÁLISIS EXPLORATORIO DE DATOS (NUEVA SECCIÓN)
-# ============================================================
-elif pagina == "Análisis exploratorio (EDA)":
-    st.title("Análisis exploratorio de datos (EDA)")
-    st.write(
-        "Exploración descriptiva del dataset IBM HR Analytics antes de interpretar "
-        "los resultados de los modelos de clasificación. Los patrones observados "
-        "son descriptivos y no demuestran causalidad."
-    )
-
-    ruta_csv = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "WA_Fn-UseC_-HR-Employee-Attrition.csv"
-    )
-
-    if not os.path.isfile(ruta_csv):
-        st.error(
-            "No se encontró el CSV del dataset. Incluya "
-            "WA_Fn-UseC_-HR-Employee-Attrition.csv en la misma carpeta que app.py."
-        )
-    else:
-        @st.cache_data
-        def cargar_dataset_eda(ruta):
-            return pd.read_csv(ruta)
-
-        df_eda = cargar_dataset_eda(ruta_csv)
-
-        tab_calidad, tab_distribuciones, tab_relaciones, tab_atipicos, tab_hallazgos = st.tabs([
-            "Calidad de datos", "Distribuciones", "Relaciones",
-            "Valores atípicos", "Hallazgos"
-        ])
-
-        with tab_calidad:
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Registros", f"{df_eda.shape[0]:,}")
-            c2.metric("Variables", f"{df_eda.shape[1]:,}")
-            c3.metric("Celdas vacías", f"{int(df_eda.isna().sum().sum()):,}")
-            c4.metric("Filas duplicadas", f"{int(df_eda.duplicated().sum()):,}")
-            calidad = pd.DataFrame({
-                "Variable": df_eda.columns,
-                "Tipo de dato": [str(t) for t in df_eda.dtypes],
-                "Valores únicos": [int(df_eda[c].nunique(dropna=False)) for c in df_eda.columns],
-                "Valores faltantes": [int(df_eda[c].isna().sum()) for c in df_eda.columns]
-            })
-            st.dataframe(calidad, use_container_width=True, hide_index=True)
-            constantes = [c for c in df_eda.columns if df_eda[c].nunique(dropna=False) <= 1]
-            st.write("Variables constantes:", ", ".join(constantes) if constantes else "No se identificaron.")
-
-        with tab_distribuciones:
-            if "Attrition" in df_eda.columns:
-                attrition = df_eda["Attrition"].value_counts().rename_axis("Clase").reset_index(name="Cantidad")
-                fig_attrition = px.bar(attrition, x="Clase", y="Cantidad", color="Clase",
-                                       title="Distribución de la variable objetivo (Attrition)")
-                st.plotly_chart(fig_attrition, use_container_width=True)
-
-            numericas_eda = df_eda.select_dtypes(include=np.number).columns.tolist()
-            if numericas_eda:
-                variable_num = st.selectbox("Variable numérica", numericas_eda, key="eda_variable_num")
-                fig_hist = px.histogram(df_eda, x=variable_num, nbins=30, title=f"Distribución de {variable_num}")
-                st.plotly_chart(fig_hist, use_container_width=True)
-
-            categoricas_eda = df_eda.select_dtypes(exclude=np.number).columns.tolist()
-            candidatas = [c for c in categoricas_eda if c != "Attrition" and df_eda[c].nunique() <= 15]
-            if "Attrition" in df_eda.columns and candidatas:
-                variable_cat = st.selectbox("Variable categórica para comparar abandono", candidatas, key="eda_variable_cat")
-                tasa = (df_eda.assign(Abandono=(df_eda["Attrition"].astype(str).str.lower().isin(["yes", "1", "true"])))
-                        .groupby(variable_cat, dropna=False)["Abandono"].mean().mul(100)
-                        .reset_index(name="Tasa de abandono (%)"))
-                fig_tasa = px.bar(tasa, x=variable_cat, y="Tasa de abandono (%)",
-                                  title=f"Tasa descriptiva de abandono por {variable_cat}")
-                st.plotly_chart(fig_tasa, use_container_width=True)
-
-        with tab_relaciones:
-            numericas_eda = df_eda.select_dtypes(include=np.number).columns.tolist()
-            if len(numericas_eda) >= 2:
-                corr = df_eda[numericas_eda].corr(numeric_only=True)
-                fig_corr = px.imshow(corr, text_auto=".2f", aspect="auto",
-                                     title="Correlación entre variables numéricas")
-                st.plotly_chart(fig_corr, use_container_width=True)
-                vars_scatter = numericas_eda[:min(5, len(numericas_eda))]
-                fig_scatter = px.scatter_matrix(df_eda, dimensions=vars_scatter,
-                                                color="Attrition" if "Attrition" in df_eda.columns else None,
-                                                title="Relación entre variables numéricas")
-                st.plotly_chart(fig_scatter, use_container_width=True)
-            if "Department" in df_eda.columns and "Attrition" in df_eda.columns:
-                conteo = df_eda.groupby(["Department", "Attrition"]).size().reset_index(name="Cantidad")
-                fig_dep = px.bar(conteo, x="Department", y="Cantidad", color="Attrition",
-                                 barmode="group", title="Abandono por departamento")
-                st.plotly_chart(fig_dep, use_container_width=True)
-
-        with tab_atipicos:
-            numericas_eda = df_eda.select_dtypes(include=np.number).columns.tolist()
-            if numericas_eda:
-                variable_out = st.selectbox("Variable para revisar valores atípicos", numericas_eda, key="eda_outlier")
-                serie = df_eda[variable_out].dropna()
-                q1, q3 = serie.quantile([0.25, 0.75])
-                iqr = q3 - q1
-                inferior, superior = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-                atipicos = serie[(serie < inferior) | (serie > superior)]
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Límite inferior", f"{inferior:.2f}")
-                c2.metric("Límite superior", f"{superior:.2f}")
-                c3.metric("Observaciones atípicas", f"{len(atipicos):,}")
-                fig_box = px.box(df_eda, y=variable_out, points="outliers", title=f"Diagrama de caja: {variable_out}")
-                st.plotly_chart(fig_box, use_container_width=True)
-                st.caption("La regla del rango intercuartílico identifica observaciones para revisión; no implica que sean errores.")
-
-        with tab_hallazgos:
-            if "Attrition" in df_eda.columns:
-                abandono = df_eda["Attrition"].astype(str).str.lower().isin(["yes", "1", "true"])
-                st.metric("Tasa global de abandono", f"{abandono.mean():.2%}")
-                columnas_resumen = [c for c in ["Age", "MonthlyIncome", "YearsAtCompany", "TotalWorkingYears", "OverTime"] if c in df_eda.columns]
-                if columnas_resumen:
-                    resumen = df_eda.assign(Abandono=abandono).groupby("Abandono")[columnas_resumen].agg("median").reset_index()
-                    resumen["Abandono"] = resumen["Abandono"].map({True: "Abandonó", False: "Permaneció"})
-                    st.write("Medianas por grupo")
-                    st.dataframe(resumen, use_container_width=True, hide_index=True)
-                if "OverTime" in df_eda.columns:
-                    tasa_horas_extra = df_eda.assign(Abandono=abandono).groupby("OverTime")["Abandono"].mean().mul(100).reset_index(name="Tasa de abandono (%)")
-                    st.plotly_chart(px.bar(tasa_horas_extra, x="OverTime", y="Tasa de abandono (%)",
-                                           title="Tasa descriptiva de abandono según horas extra"),
-                                    use_container_width=True)
-            st.caption("Los resultados del EDA son descriptivos y no deben interpretarse como evidencia de causalidad.")
-
-
-    st.stop()
 
 
 # ============================================================
