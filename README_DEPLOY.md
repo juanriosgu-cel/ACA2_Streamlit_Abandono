@@ -1,4 +1,4 @@
-# Streamlit ACA 2 – versión mejorada
+# Streamlit ACA 1 – versión mejorada
 
 ## ¿Qué mejora esta versión?
 
