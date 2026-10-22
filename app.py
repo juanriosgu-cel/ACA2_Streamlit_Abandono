@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -21,7 +22,8 @@ st.set_page_config(
 # ============================================================
 @st.cache_resource
 def cargar_datos():
-    return joblib.load("modelos_despliegue.joblib")
+    ruta_modelos = Path(__file__).resolve().parent / "modelos_despliegue.joblib"
+    return joblib.load(ruta_modelos)
 
 
 # La portada y el EDA pueden consultarse aunque el archivo de modelos no esté
@@ -230,17 +232,17 @@ elif pagina == "Análisis exploratorio (EDA)":
 
     @st.cache_data
     def cargar_dataset_eda():
-        rutas = [
+        carpeta_app = Path(__file__).resolve().parent
+        nombres_csv = [
             "WA_Fn-UseC_-HR-Employee-Attrition.csv",
             "WA_Fn-UseC_-HR-Employee-Attrition(1).csv"
         ]
-        for ruta in rutas:
-            if os.path.exists(ruta):
-                return pd.read_csv(ruta)
+        for nombre_csv in nombres_csv:
+            ruta_csv = carpeta_app / nombre_csv
+            if ruta_csv.is_file():
+                return pd.read_csv(ruta_csv)
         return None
 
-    # os se importa aquí para mantener intacto el bloque de carga de modelos.
-    import os
     df_eda = cargar_dataset_eda()
     if df_eda is None:
         st.error(
