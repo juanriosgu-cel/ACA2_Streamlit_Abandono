@@ -24,30 +24,30 @@ def cargar_datos():
     return joblib.load("modelos_despliegue.joblib")
 
 
+# La portada y el EDA pueden consultarse aunque el archivo de modelos no esté
+# disponible. Las secciones de clasificación requieren el artefacto original.
 try:
     data = cargar_datos()
+    error_modelos = None
 except FileNotFoundError:
-    st.error(
-        "No se encontró el archivo modelos_despliegue.joblib. "
-        "Verifique que se encuentre en la misma carpeta que app.py."
-    )
-    st.stop()
+    data = None
+    error_modelos = "No se encontró modelos_despliegue.joblib. Las secciones de presentación y EDA siguen disponibles; para usar los módulos de clasificación, agregue el archivo original junto a app.py."
 
-modelos = data["models"]
-columnas_modelo = data["columns"]
-metricas = pd.DataFrame(data["metrics"])
-matrices = data["confusion_matrices"]
-roc_data = data["roc_data"]
-pr_data = data["pr_data"]
-importancias = data.get("feature_importance", {})
-coeficientes = data.get("coefficients", {})
-tiempos = pd.DataFrame(data.get("optimization_times", []))
-categoricas = data.get("categorical_values", {})
-defaults = data.get("numeric_defaults", {})
-mins = data.get("numeric_min", {})
-maxs = data.get("numeric_max", {})
-pca_data = pd.DataFrame(data.get("pca_data", []))
-pca_variance = data.get("pca_variance", [])
+modelos = data["models"] if data else {}
+columnas_modelo = data["columns"] if data else []
+metricas = pd.DataFrame(data["metrics"] if data else [], columns=["Modelo", "Accuracy", "Precision", "Recall", "F1", "F1_Macro", "AUC", "PR_AUC"])
+matrices = data.get("confusion_matrices", {}) if data else {}
+roc_data = data.get("roc_data", {}) if data else {}
+pr_data = data.get("pr_data", {}) if data else {}
+importancias = data.get("feature_importance", {}) if data else {}
+coeficientes = data.get("coefficients", {}) if data else {}
+tiempos = pd.DataFrame(data.get("optimization_times", []) if data else [])
+categoricas = data.get("categorical_values", {}) if data else {}
+defaults = data.get("numeric_defaults", {}) if data else {}
+mins = data.get("numeric_min", {}) if data else {}
+maxs = data.get("numeric_max", {}) if data else {}
+pca_data = pd.DataFrame(data.get("pca_data", []) if data else [])
+pca_variance = data.get("pca_variance", []) if data else []
 
 
 # ============================================================
@@ -149,14 +149,15 @@ pagina = st.sidebar.radio(
 
 st.sidebar.divider()
 
-modelo_seleccionado = st.sidebar.selectbox(
-    "Modelo para análisis",
-    list(modelos.keys()),
-    index=(
-        list(modelos.keys()).index("Random Forest")
-        if "Random Forest" in modelos else 0
+if modelos:
+    modelo_seleccionado = st.sidebar.selectbox(
+        "Modelo para análisis",
+        list(modelos.keys()),
+        index=(list(modelos.keys()).index("Random Forest") if "Random Forest" in modelos else 0)
     )
-)
+else:
+    modelo_seleccionado = None
+    st.sidebar.info("Modelos no cargados")
 
 st.sidebar.caption(
     "El modelo final del estudio es Random Forest. "
@@ -381,6 +382,15 @@ elif pagina == "Análisis exploratorio (EDA)":
             if "Yes" in overtime.index and "No" in overtime.index:
                 st.write(f"La tasa de abandono entre empleados con horas extra es **{overtime['Yes']:.1f}%**, frente a **{overtime['No']:.1f}%** para quienes no reportan horas extra.")
         st.warning("Estos hallazgos describen asociaciones observadas en los datos; no prueban que una variable cause el abandono.")
+
+
+# ============================================================
+# CONTROL DE DISPONIBILIDAD DE LOS MODELOS
+# ============================================================
+paginas_modelo = ["Resumen", "Comparación de modelos", "Análisis del modelo", "Predicción individual", "Metodología"]
+if pagina in paginas_modelo and data is None:
+    st.warning(error_modelos)
+    st.stop()
 
 
 # ============================================================
