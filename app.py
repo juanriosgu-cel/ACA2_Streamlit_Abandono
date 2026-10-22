@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -21,33 +22,34 @@ st.set_page_config(
 # ============================================================
 @st.cache_resource
 def cargar_datos():
-    return joblib.load("modelos_despliegue.joblib")
+    ruta_modelos = Path(__file__).resolve().parent / "modelos_despliegue.joblib"
+    return joblib.load(ruta_modelos)
 
 
+# La portada y el EDA pueden consultarse aunque el archivo de modelos no esté
+# disponible. Las secciones de clasificación requieren el artefacto original.
 try:
     data = cargar_datos()
+    error_modelos = None
 except FileNotFoundError:
-    st.error(
-        "No se encontró el archivo modelos_despliegue.joblib. "
-        "Verifique que se encuentre en la misma carpeta que app.py."
-    )
-    st.stop()
+    data = None
+    error_modelos = "No se encontró modelos_despliegue.joblib. Las secciones de presentación y EDA siguen disponibles; para usar los módulos de clasificación, agregue el archivo original junto a app.py."
 
-modelos = data["models"]
-columnas_modelo = data["columns"]
-metricas = pd.DataFrame(data["metrics"])
-matrices = data["confusion_matrices"]
-roc_data = data["roc_data"]
-pr_data = data["pr_data"]
-importancias = data.get("feature_importance", {})
-coeficientes = data.get("coefficients", {})
-tiempos = pd.DataFrame(data.get("optimization_times", []))
-categoricas = data.get("categorical_values", {})
-defaults = data.get("numeric_defaults", {})
-mins = data.get("numeric_min", {})
-maxs = data.get("numeric_max", {})
-pca_data = pd.DataFrame(data.get("pca_data", []))
-pca_variance = data.get("pca_variance", [])
+modelos = data["models"] if data else {}
+columnas_modelo = data["columns"] if data else []
+metricas = pd.DataFrame(data["metrics"] if data else [], columns=["Modelo", "Accuracy", "Precision", "Recall", "F1", "F1_Macro", "AUC", "PR_AUC"])
+matrices = data.get("confusion_matrices", {}) if data else {}
+roc_data = data.get("roc_data", {}) if data else {}
+pr_data = data.get("pr_data", {}) if data else {}
+importancias = data.get("feature_importance", {}) if data else {}
+coeficientes = data.get("coefficients", {}) if data else {}
+tiempos = pd.DataFrame(data.get("optimization_times", []) if data else [])
+categoricas = data.get("categorical_values", {}) if data else {}
+defaults = data.get("numeric_defaults", {}) if data else {}
+mins = data.get("numeric_min", {}) if data else {}
+maxs = data.get("numeric_max", {}) if data else {}
+pca_data = pd.DataFrame(data.get("pca_data", []) if data else [])
+pca_variance = data.get("pca_variance", []) if data else []
 
 
 # ============================================================
@@ -137,6 +139,8 @@ st.sidebar.title("Navegación")
 pagina = st.sidebar.radio(
     "Seleccione una sección",
     [
+        "Presentación",
+        "Análisis exploratorio (EDA)",
         "Resumen",
         "Comparación de modelos",
         "Análisis del modelo",
@@ -147,14 +151,15 @@ pagina = st.sidebar.radio(
 
 st.sidebar.divider()
 
-modelo_seleccionado = st.sidebar.selectbox(
-    "Modelo para análisis",
-    list(modelos.keys()),
-    index=(
-        list(modelos.keys()).index("Random Forest")
-        if "Random Forest" in modelos else 0
+if modelos:
+    modelo_seleccionado = st.sidebar.selectbox(
+        "Modelo para análisis",
+        list(modelos.keys()),
+        index=(list(modelos.keys()).index("Random Forest") if "Random Forest" in modelos else 0)
     )
-)
+else:
+    modelo_seleccionado = None
+    st.sidebar.info("Modelos no cargados")
 
 st.sidebar.caption(
     "El modelo final del estudio es Random Forest. "
@@ -165,11 +170,229 @@ st.sidebar.caption(
 # ============================================================
 # ENCABEZADO
 # ============================================================
-st.title("Predicción del abandono de empleados")
-st.caption(
-    "Aplicación interactiva desarrollada a partir de los modelos "
-    "evaluados en la ACA 1 – Caso 1."
-)
+if pagina not in ["Presentación"]:
+    st.title("Clasificación del abandono de empleados")
+    st.caption(
+        "Aplicación de aprendizaje automático para analizar y clasificar "
+        "el abandono de empleados mediante modelos supervisados."
+    )
+
+
+# ============================================================
+# PRESENTACIÓN
+# ============================================================
+if pagina == "Presentación":
+    st.markdown("""
+    <div style="padding:2rem 2.2rem;border-radius:18px;
+                background:linear-gradient(125deg,#142d4e 0%,#176b87 55%,#23a6a1 100%);
+                color:white;border:1px solid rgba(255,255,255,.18);">
+      <div style="font-size:.9rem;letter-spacing:.14em;font-weight:700;opacity:.9">
+        APRENDIZAJE AUTOMÁTICO
+      </div>
+      <h1 style="color:white;margin:.7rem 0 .2rem 0">Clasificación del abandono de empleados</h1>
+      <div style="font-size:1.08rem;margin-bottom:1.2rem">
+        Especialización en Inteligencia Artificial
+      </div>
+      <div style="height:1px;background:rgba(255,255,255,.4);margin:1.2rem 0"></div>
+      <div style="font-size:1rem;font-weight:600">Dataset IBM HR Analytics — Employee Attrition</div>
+      <div style="margin-top:1.2rem;font-size:.85rem;letter-spacing:.08em;font-weight:700">PRESENTADO POR</div>
+      <div style="margin-top:.4rem;line-height:1.9">
+        Juan Guillermo Ríos<br>Víctor Rodríguez Polo<br>Michelle Ángel Castillo Mendoza
+      </div>
+      <div style="margin-top:1rem;font-size:.85rem;letter-spacing:.08em;font-weight:700">DOCENTE</div>
+      <div style="margin-top:.35rem">Hamilton Rivera</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("#### Exploración")
+        st.write("Conocer la estructura, calidad y comportamiento de los datos.")
+    with c2:
+        st.markdown("#### Clasificación")
+        st.write("Comparar algoritmos supervisados para identificar la clase de abandono.")
+    with c3:
+        st.markdown("#### Evaluación")
+        st.write("Interpretar métricas, errores y probabilidades estimadas.")
+    st.info("Esta aplicación se centra en clasificación del abandono. No incluye módulos de regresión de ingresos ni segmentación de empleados.")
+    st.caption("Proyecto académico · Especialización en Inteligencia Artificial")
+
+
+# ============================================================
+# ANÁLISIS EXPLORATORIO DE DATOS (EDA)
+# ============================================================
+elif pagina == "Análisis exploratorio (EDA)":
+    st.header("Análisis exploratorio de datos (EDA)")
+    st.write(
+        "Exploración descriptiva del dataset IBM HR Analytics antes de interpretar "
+        "los resultados de los modelos de clasificación. Los patrones observados "
+        "son descriptivos y no demuestran causalidad."
+    )
+
+    @st.cache_data
+    def cargar_dataset_eda():
+        carpeta_app = Path(__file__).resolve().parent
+        nombres_csv = [
+            "WA_Fn-UseC_-HR-Employee-Attrition.csv",
+            "WA_Fn-UseC_-HR-Employee-Attrition(1).csv"
+        ]
+        for nombre_csv in nombres_csv:
+            ruta_csv = carpeta_app / nombre_csv
+            if ruta_csv.is_file():
+                return pd.read_csv(ruta_csv)
+        return None
+
+    df_eda = cargar_dataset_eda()
+    if df_eda is None:
+        st.error(
+            "No se encontró el CSV del dataset. Incluya "
+            "WA_Fn-UseC_-HR-Employee-Attrition.csv en la misma carpeta que app.py."
+        )
+        st.stop()
+
+    numeric_cols = df_eda.select_dtypes(include=np.number).columns.tolist()
+    categorical_cols = df_eda.select_dtypes(exclude=np.number).columns.tolist()
+    n_total = len(df_eda)
+    n_abandono = int((df_eda["Attrition"] == "Yes").sum()) if "Attrition" in df_eda else 0
+    tasa_abandono = n_abandono / n_total if n_total else 0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Registros", f"{n_total:,}")
+    m2.metric("Variables", len(df_eda.columns))
+    m3.metric("Abandonos", f"{n_abandono:,}")
+    m4.metric("Tasa de abandono", f"{tasa_abandono:.1%}")
+
+    tab_calidad, tab_distribucion, tab_relaciones, tab_atipicos, tab_hallazgos = st.tabs([
+        "Calidad de datos", "Distribuciones", "Relaciones", "Valores atípicos", "Hallazgos"
+    ])
+
+    with tab_calidad:
+        st.subheader("Estructura y calidad del conjunto")
+        calidad = pd.DataFrame({
+            "Indicador": ["Filas", "Columnas", "Celdas vacías", "Filas duplicadas", "Variables constantes"],
+            "Resultado": [
+                len(df_eda), len(df_eda.columns), int(df_eda.isna().sum().sum()),
+                int(df_eda.duplicated().sum()),
+                int(sum(df_eda[c].nunique(dropna=False) <= 1 for c in df_eda.columns))
+            ]
+        })
+        st.dataframe(calidad, use_container_width=True, hide_index=True)
+        faltantes = df_eda.isna().sum().rename("Faltantes").reset_index().rename(columns={"index":"Variable"})
+        faltantes = faltantes[ faltantes["Faltantes"] > 0 ]
+        if faltantes.empty:
+            st.success("No se identificaron valores faltantes en el dataset.")
+        else:
+            st.dataframe(faltantes, use_container_width=True, hide_index=True)
+        st.markdown("#### Tipos de variables")
+        tipos = pd.DataFrame({"Variable": df_eda.columns, "Tipo": df_eda.dtypes.astype(str).values,
+                              "Valores distintos": [df_eda[c].nunique(dropna=False) for c in df_eda.columns]})
+        st.dataframe(tipos, use_container_width=True, hide_index=True)
+
+    with tab_distribucion:
+        st.subheader("Distribución de la variable objetivo")
+        if "Attrition" in df_eda:
+            conteo = df_eda["Attrition"].value_counts().rename_axis("Abandono").reset_index(name="Empleados")
+            fig = px.bar(conteo, x="Abandono", y="Empleados", color="Abandono",
+                         color_discrete_map={"Yes":"#E76F51", "No":"#2878B5"},
+                         text="Empleados", title="Distribución de empleados por abandono")
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        variable_num = st.selectbox("Variable numérica", numeric_cols,
+                                    index=numeric_cols.index("MonthlyIncome") if "MonthlyIncome" in numeric_cols else 0)
+        fig_hist = px.histogram(df_eda, x=variable_num, color="Attrition" if "Attrition" in df_eda else None,
+                                marginal="box", barmode="overlay", opacity=.72,
+                                title=f"Distribución de {variable_num}")
+        st.plotly_chart(fig_hist, use_container_width=True)
+        if "Attrition" in df_eda:
+            st.markdown("#### Tasa de abandono por variable categórica")
+            opciones_cat = [c for c in categorical_cols if c != "Attrition"]
+            cat = st.selectbox("Variable categórica", opciones_cat,
+                               index=opciones_cat.index("OverTime") if "OverTime" in opciones_cat else 0)
+            tasas = df_eda.groupby(cat, dropna=False)["Attrition"].apply(lambda s: (s == "Yes").mean()).mul(100).reset_index(name="Tasa de abandono (%)")
+            tasas[cat] = tasas[cat].astype(str)
+            fig_tasa = px.bar(tasas.sort_values("Tasa de abandono (%)", ascending=False),
+                              x=cat, y="Tasa de abandono (%)", color="Tasa de abandono (%)",
+                              color_continuous_scale=["#8ECAE6","#219EBC","#E76F51"],
+                              text=tasas.sort_values("Tasa de abandono (%)", ascending=False)["Tasa de abandono (%)"].map(lambda x:f"{x:.1f}%"),
+                              title=f"Tasa de abandono según {cat}")
+            st.plotly_chart(fig_tasa, use_container_width=True)
+
+    with tab_relaciones:
+        st.subheader("Relaciones entre variables")
+        corr_cols = [c for c in numeric_cols if df_eda[c].nunique() > 1]
+        default_corr = [c for c in ["Age", "MonthlyIncome", "YearsAtCompany", "TotalWorkingYears"] if c in corr_cols]
+        corr_selected = st.multiselect("Variables para correlación", corr_cols, default=default_corr[:8])
+        if len(corr_selected) >= 2:
+            corr = df_eda[corr_selected].corr(numeric_only=True)
+            fig_corr = px.imshow(corr, text_auto=".2f", color_continuous_scale="RdBu_r",
+                                 zmin=-1, zmax=1, title="Matriz de correlación")
+            st.plotly_chart(fig_corr, use_container_width=True)
+        scatter_defaults = [c for c in ["Age", "MonthlyIncome", "YearsAtCompany", "TotalWorkingYears"] if c in numeric_cols]
+        if len(scatter_defaults) >= 2:
+            st.markdown("#### Matriz de dispersión de variables principales")
+            pair_vars = st.multiselect("Variables de la matriz", numeric_cols, default=scatter_defaults)
+            if len(pair_vars) >= 2:
+                fig_pair = px.scatter_matrix(df_eda, dimensions=pair_vars,
+                    color="Attrition" if "Attrition" in df_eda else None,
+                    color_discrete_map={"Yes":"#E76F51", "No":"#2878B5"},
+                    opacity=.55, title="Relaciones multivariadas")
+                fig_pair.update_layout(height=750)
+                st.plotly_chart(fig_pair, use_container_width=True)
+        if "Department" in df_eda and "Attrition" in df_eda:
+            dept = df_eda.groupby("Department")["Attrition"].apply(lambda s:(s=="Yes").mean()*100).reset_index(name="Tasa (%)")
+            fig_dept = px.bar(dept, x="Department", y="Tasa (%)", color="Tasa (%)",
+                              color_continuous_scale=["#8ECAE6","#219EBC","#E76F51"],
+                              title="Tasa de abandono por departamento")
+            st.plotly_chart(fig_dept, use_container_width=True)
+
+    with tab_atipicos:
+        st.subheader("Detección estadística mediante rango intercuartílico (IQR)")
+        variable_out = st.selectbox("Variable para detectar valores atípicos", numeric_cols,
+                                    index=numeric_cols.index("MonthlyIncome") if "MonthlyIncome" in numeric_cols else 0)
+        q1 = df_eda[variable_out].quantile(.25)
+        q3 = df_eda[variable_out].quantile(.75)
+        iqr = q3 - q1
+        limite_inf, limite_sup = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+        mask_out = (df_eda[variable_out] < limite_inf) | (df_eda[variable_out] > limite_sup)
+        st.caption(f"Límite inferior: {limite_inf:,.2f} · Límite superior: {limite_sup:,.2f}")
+        a, b, c = st.columns(3)
+        a.metric("Valores atípicos detectados", int(mask_out.sum()))
+        b.metric("Dentro de los límites", int((~mask_out).sum()))
+        c.metric("Porcentaje atípico", f"{mask_out.mean():.1%}")
+        df_box = df_eda[[variable_out]].copy()
+        df_box["Tipo de dato"] = np.where(mask_out, "Atípico", "Dentro del rango")
+        fig_box = px.box(df_box, x="Tipo de dato", y=variable_out, color="Tipo de dato",
+                         color_discrete_map={"Atípico":"#E76F51","Dentro del rango":"#2878B5"},
+                         points="all", title=f"Distribución y valores atípicos: {variable_out}")
+        st.plotly_chart(fig_box, use_container_width=True)
+        st.info("Los valores atípicos estadísticos no son necesariamente errores. Deben interpretarse en el contexto de la variable y no eliminarse automáticamente.")
+
+    with tab_hallazgos:
+        st.subheader("Hallazgos descriptivos")
+        st.write(f"La tasa global de abandono en la base es **{tasa_abandono:.2%}** ({n_abandono} de {n_total} empleados).")
+        if "YearsAtCompany" in df_eda and "Attrition" in df_eda:
+            med = df_eda.groupby("Attrition")["YearsAtCompany"].median()
+            if "Yes" in med.index and "No" in med.index:
+                st.write(f"La mediana de antigüedad es **{med['Yes']:.0f} años** entre quienes abandonaron y **{med['No']:.0f} años** entre quienes permanecieron.")
+        if "MonthlyIncome" in df_eda and "Attrition" in df_eda:
+            med_ing = df_eda.groupby("Attrition")["MonthlyIncome"].median()
+            if "Yes" in med_ing.index and "No" in med_ing.index:
+                st.write(f"La mediana de ingreso mensual es **{med_ing['Yes']:,.0f}** para quienes abandonaron y **{med_ing['No']:,.0f}** para quienes permanecieron.")
+        if "OverTime" in df_eda and "Attrition" in df_eda:
+            overtime = df_eda.groupby("OverTime")["Attrition"].apply(lambda s:(s=="Yes").mean()*100)
+            if "Yes" in overtime.index and "No" in overtime.index:
+                st.write(f"La tasa de abandono entre empleados con horas extra es **{overtime['Yes']:.1f}%**, frente a **{overtime['No']:.1f}%** para quienes no reportan horas extra.")
+        st.warning("Estos hallazgos describen asociaciones observadas en los datos; no prueban que una variable cause el abandono.")
+
+
+# ============================================================
+# CONTROL DE DISPONIBILIDAD DE LOS MODELOS
+# ============================================================
+paginas_modelo = ["Resumen", "Comparación de modelos", "Análisis del modelo", "Predicción individual", "Metodología"]
+if pagina in paginas_modelo and data is None:
+    st.warning(error_modelos)
+    st.stop()
 
 
 # ============================================================
